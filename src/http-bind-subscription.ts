@@ -6,15 +6,18 @@ import {
     Subscription, SubscriptionProtocol
 } from 'enqueuer';
 import { HttpContainerPool } from 'enqueuer/js/pools/http-container-pool';
+import { HttpRequester } from 'enqueuer/js/pools/http-requester';
 import { ProtocolDocumentation } from 'enqueuer/js/protocols/protocol-documentation';
 import * as express from 'express-serve-static-core';
 import * as _ from 'lodash';
+import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { BindConfig } from './bind-config';
 
 interface Message {
     body: any;
     headers: any;
+    url: string;
 }
 
 export class HttpBindSubscription extends Subscription {
@@ -27,6 +30,7 @@ export class HttpBindSubscription extends Subscription {
     private httpServer: express.Router;
     private bind: Array<BindConfig>;
     private debugger = debug('Enqueuer:Plugin:HttpBind:Subscription');
+    private method: string;
 
     constructor(subscription: InputSubscriptionModel) {
         super(subscription);
@@ -35,6 +39,7 @@ export class HttpBindSubscription extends Subscription {
         this.type = this.type.toLowerCase();
         this.secureServer = this.isSecureServer();
         this.proxy = this.isProxyServer();
+        this.method = (this.method || "post").toLowerCase();
     }
 
     public async subscribe(): Promise<void> {
@@ -52,11 +57,27 @@ export class HttpBindSubscription extends Subscription {
     }
 
     public async receiveMessage(): Promise<any> {
-        if (this.proxy) {
-            return this.proxyServerMessageReceiving();
-        } else {
-            return this.realServerMessageReceiving();
-        }
+        return new Promise((resolve) => {
+            this.debugger(`%s: HTTP server listenning for requests on port: %d`, this.name, this.port);
+            const realServerFunction = async (request: any, responseHandler: any, next: any) => {
+                this.debugger(`%s got hit URL: %o`, this.name, request.url);
+                this.debugger(`%s got hit with headers: %o`, this.name, request.headers);
+                this.debugger(`%s got hit with body: %o`, this.name, request.rawBody);
+                request.body = request.rawBody;
+                if (this.responseToClientHandler) {
+                    next();
+                }
+                this.responseToClientHandler = responseHandler;
+                const serviceCalled = await this.callServiceHandler(request);
+                if (serviceCalled) {
+                    return resolve();
+                } else {
+                    this.responseToClientHandler = null;
+                }
+                next();
+            };
+            (this.httpServer as any)[this.method](this.path, realServerFunction);
+        });
     }
 
     public async sendResponse(): Promise<void> {
@@ -73,33 +94,11 @@ export class HttpBindSubscription extends Subscription {
         }
     }
 
-    private async realServerMessageReceiving(): Promise<void> {
-        return new Promise((resolve) => {
-            this.debugger(`%s: HTTP server listenning for requests on port: %d`, this.name, this.port);
-            const realServerFunction = async (request: any, responseHandler: any, next: any) => {
-                this.debugger(`%s got hit URL: %o`, this.name, request.url);
-                this.debugger(`%s got hit with headers: %o`, this.name, request.headers);
-                this.debugger(`%s got hit with body: %o`, this.name, request.rawBody);
-                request.body = request.rawBody;
-                if (this.responseToClientHandler) {
-                    next();
-                }
-                this.responseToClientHandler = responseHandler;
-                const serviceCalled = await this.callSoapService(request);
-                if (serviceCalled) {
-                    return resolve();
-                }
-                next();
-            };
-            this.httpServer.post(this.path, realServerFunction);
-        });
-    }
-
     private createServiceHandler() {
         this.debugger('%s. Creating service handler.', this.name);
         const serviceHandler = _.set(HttpBindSubscription.serviceHandlers, `${this.name}`,
-            (body: any, headers: any) => {
-                const message = this.createMessageReceivedStructure(body, headers);
+            (body: any, headers: any, url: string) => {
+                const message = this.createMessageReceivedStructure(body, headers, url);
                 this.debugger('Service %s Called with message: %o.', this.name, message);
                 if (this.proxy) {
                     this.redirect = message;
@@ -115,16 +114,26 @@ export class HttpBindSubscription extends Subscription {
         return serviceHandler;
     }
 
-    private async callSoapService(request: express.Request) {
+    private async callServiceHandler(request: express.Request) {
         const payload = await this.parseBody(request.body);
 
         if (this.shouldCallService(request.headers, payload)) {
             const service = this.getServiceHandler();
-            service(payload, request.headers);
+            service(payload, request.headers, request.url);
             return true;
         }
         this.debugger(`%s: Ignoring request`, this.name);
         return false;
+    }
+
+    private async parseBody(body: string) {
+        if (!body) {
+            return body;
+        }
+        if (this.bodyType && this.bodyType.toUpperCase() === 'XML') {
+            return this.parseXMLBody(body);
+        }
+        return JSON.parse(body);
     }
 
     private async parseXMLBody(body: string) {
@@ -143,13 +152,6 @@ export class HttpBindSubscription extends Subscription {
                     return resolve(payload);
                 });
         });
-    }
-
-    private async parseBody(body: string) {
-        if (this.bodyType && this.bodyType.toUpperCase() === 'XML') {
-            return this.parseXMLBody(body);
-        }
-        return JSON.parse(body);
     }
 
     private shouldCallService(headers: any, payload: any) {
@@ -180,39 +182,31 @@ export class HttpBindSubscription extends Subscription {
     private async callThroughProxy(message: Message) {
         try {
             this.response = await this.redirectCall(message);
-            this.debugger(`%s. ${this.type}:${this.port} got redirection response: %J`, this.name, this.response);
+            this.debugger(`%s. ${this.type}:${this.port} got redirection response: %o`, this.name, this.response);
             this.executeHookEvent('onMessageReceived', this.response);
-            // mesageReceived(this.response);
+            return this.response;
         } catch (err) {
-            this.debugger(`%s. ${this.type}:${this.port} got error response: %J`, this.name, err);
-            // errorReceived(err);
+            this.debugger(`%s. ${this.type}:${this.port} got error response: %o`, this.name, err);
+            throw err;
         }
     }
 
-    private createMessageReceivedStructure(args: any, headers: any): Message {
+    private createMessageReceivedStructure(args: any, headers: any, url: string): Message {
         return {
             body: _.cloneDeep(args),
-            headers: _.cloneDeep(headers || {})
+            headers: _.cloneDeep(headers || {}),
+            url: url
         };
     }
 
     private async redirectCall(message: Message): Promise<any> {
-        // const config: InputPublisherModel = {
-        //     headers: message.headers,
-        //     ignoreHooks: true,
-        //     name: this.name,
-        //     options: {
-        //         path: this.path
-        //     },
-        //     payload: message.body,
-        //     soap: _.cloneDeep(this.soap),
-        //     timeout: this.timeout,
-        //     type: this.type
-        // };
-
-        // const soapPublisher = new SoapPublisher(config);
-        // this.debugger(`%s. Redirecting call from localhost:${this.port}(${this.path}) to ${this.path}`, this.name);
-        // return await soapPublisher.publish();
+        this.debugger(`%s. Redirecting call from localhost:${this.port}(${this.path}) to ${this.target}`, this.name);
+        return await new HttpRequester(path.posix.join(this.target, message.url),
+            this.method,
+            message.headers,
+            message.body,
+            this.timeout)
+            .request();
     }
 
     private isSecureServer(): boolean {

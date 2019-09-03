@@ -8,6 +8,15 @@
                 "type": "int",
                 "example": 8080
             },
+            "method": {
+                "type": "string",
+                "example": "get",
+                "defaultValue": "post"
+            },
+            "target": {
+                "type": "string",
+                "example": "http://targetservice.com"
+            },
             "bodyType": {
                 "required": true,
                 "description": "The type of the body content. Accept XML or JSON",

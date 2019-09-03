@@ -1,6 +1,6 @@
 {
   "name": "enqueuer-plugin-http-bind",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "The HTTP-Bind subscription provides implementations for an http service that can bind only some requests",
   "main": "./dist/index.js",
   "typings": "./dist/index.d.ts",
