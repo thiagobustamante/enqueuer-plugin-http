@@ -1,0 +1,109 @@
+{
+    "description": "The HTTP-Bind subscription provides implementations for an http service that can bind only some requests",
+    "libraryHomepage": "https://github.com/thiagobustamante/enqueuer-plugin-http-bind",
+    "schema": {
+        "attributes": {
+            "port": {
+                "required": true,
+                "type": "int",
+                "example": 8080
+            },
+            "bodyType": {
+                "required": true,
+                "description": "The type of the body content. Accept XML or JSON",
+                "type": "string",
+                "defaultValue": "JSON"
+            },
+            "bind": {
+                "required": true,
+                "description": "Configure the bindings for the service",
+                "type": {
+                    "value": {
+                        "required": true,
+                        "description": "The expected value for the current expression",
+                        "type": "string",
+                        "example": "expected value"
+                    },
+                    "request": {
+                        "required": true,
+                        "type": {
+                            "body": {
+                                "required": false,
+                                "description": "An expression to be evaluated in the request body",
+                                "type": "string",
+                                "example": "Envelope.Header.MessageHeader.Action"
+                            },
+                            "header": {
+                                "required": false,
+                                "description": "The name of a header qhere to look for the expected value",
+                                "type": "string",
+                                "example": "soapAction"
+                            }
+                        }
+                    }
+                }
+            },
+            "timeout": {
+                "required": false,
+                "type": "int",
+                "defaultValue": 3000,
+                "suffix": "ms"
+            },
+            "credentials": {
+                "required": false,
+                "description": "Values used when being used as a secure server",
+                "type": {
+                    "key": {
+                        "required": true,
+                        "type": "string"
+                    },
+                    "cert": {
+                        "required": true,
+                        "type": "string"
+                    }
+                }
+            },
+            "path": {
+                "required": false,
+                "type": "string",
+                "defaultValue": "/",
+                "example": "/services/myservice"
+            },
+            "response": {
+                "description": "Response to be given when not being used as proxy",
+                "type": {
+                    "headers": {
+                        "description": "Include custom headers",
+                        "type": "object",
+                        "defaultValue": {}
+                    },
+                    "status": {
+                        "required": true,
+                        "type": "int"
+                    },
+                    "payload": {
+                        "required": true,
+                        "type": "any"
+                    }
+                },
+                "defaultValue": {}
+            }
+        },
+        "hooks": {
+            "onMessageReceived": {
+                "description": "Gets called when the subscription receives an message",
+                "arguments": {
+                    "headers": {},
+                    "body": {}
+                }
+            },
+            "onOriginalMessageReceived": {
+                "description": "Gets called when the proxy is hit, before actually proxying the message",
+                "arguments": {
+                    "headers": {},
+                    "body": {}
+                }
+            }
+        }
+    }
+}
