@@ -19,7 +19,7 @@
             },
             "bodyType": {
                 "required": true,
-                "description": "The type of the body content. Accept XML or JSON",
+                "description": "The type of the body content. Accept XML, FORM, or JSON",
                 "type": "string",
                 "defaultValue": "JSON"
             },

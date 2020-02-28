@@ -14,6 +14,9 @@ import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { BindConfig } from './bind-config';
 
+import * as querystring from 'querystring';
+
+
 interface Message {
     body: any;
     headers: any;
@@ -133,6 +136,9 @@ export class HttpBindSubscription extends Subscription {
         if (this.bodyType && this.bodyType.toUpperCase() === 'XML') {
             return this.parseXMLBody(body);
         }
+        else if (this.bodyType && this.bodyType.toUpperCase() === 'FORM') {
+            return this.parseFormBody(body);
+        }
         return JSON.parse(body);
     }
 
@@ -152,6 +158,10 @@ export class HttpBindSubscription extends Subscription {
                     return resolve(payload);
                 });
         });
+    }
+
+    private async parseFormBody(body: string) {
+        return querystring.parse(body);
     }
 
     private shouldCallService(headers: any, payload: any) {

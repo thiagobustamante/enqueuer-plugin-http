@@ -1,6 +1,6 @@
 {
   "name": "enqueuer-plugin-http-bind",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "The HTTP-Bind subscription provides implementations for an http service that can bind only some requests",
   "main": "./dist/index.js",
   "typings": "./dist/index.d.ts",
@@ -49,6 +49,7 @@
     "assert": "^2.0.0",
     "debug": "^4.1.1",
     "lodash": "^4.17.15",
+    "querystring": "^0.2.0",
     "xml2js": "^0.4.19"
   },
   "devDependencies": {
@@ -63,12 +64,12 @@
     "@types/node": "^12.7.2",
     "@types/xml2js": "^0.4.4",
     "chai": "^4.2.0",
-    "codecov": "^3.3.0",
+    "codecov": "^3.6.5",
     "copyfiles": "^2.1.1",
     "cross-env": "^5.2.0",
     "enqueuer": "^5.0.2",
     "mocha": "^5.2.0",
-    "nyc": "^14.1.1",
+    "nyc": "^15.0.0",
     "rimraf": "^2.7.1",
     "source-map-support": "^0.5.13",
     "ts-node": "^7.0.1",
